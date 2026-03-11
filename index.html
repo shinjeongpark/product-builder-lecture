@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Calculator</title>
+    <title>Omok (Gomoku) Game</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body data-theme="light">
@@ -12,12 +12,24 @@
     </div>
 
     <header>
-        <h1>Calculator</h1>
+        <h1>Omok (Gomoku)</h1>
+        <div id="game-status">Black's Turn</div>
     </header>
 
     <main>
-        <simple-calculator></simple-calculator>
+        <omok-game id="omok-board"></omok-game>
+        <div class="controls">
+            <button id="restart-btn">Restart Game</button>
+        </div>
     </main>
+
+    <div id="win-modal" class="hidden">
+        <div class="modal-content">
+            <h2 id="winner-text">Black Wins!</h2>
+            <button id="modal-restart-btn">Play Again</button>
+        </div>
+    </div>
+
     <script src="main.js"></script>
 </body>
 </html>
