@@ -3,32 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Omok (Gomoku) Game</title>
+    <title>US Stock Analysis Dashboard</title>
     <link rel="stylesheet" href="style.css">
+    <!-- ApexCharts Library -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
-<body data-theme="light">
+<body data-theme="dark">
     <div class="theme-switch-wrapper">
-        <button id="theme-toggle">Dark Mode</button>
+        <button id="theme-toggle">Light Mode</button>
     </div>
 
     <header>
-        <h1>Omok (Gomoku)</h1>
-        <div id="game-status">Black's Turn</div>
+        <h1>Stock Analysis</h1>
+        <div class="search-container">
+            <input type="text" id="ticker-input" placeholder="Enter US Ticker (e.g. AAPL, TSLA)" value="AAPL">
+            <button id="search-btn">Analyze</button>
+        </div>
     </header>
 
     <main>
-        <omok-game id="omok-board"></omok-game>
-        <div class="controls">
-            <button id="restart-btn">Restart Game</button>
+        <div id="stock-info" class="hidden">
+            <h2 id="stock-name">Apple Inc. (AAPL)</h2>
+            <div class="price-info">
+                <span id="current-price">$0.00</span>
+                <span id="price-change" class="">0.00 (0.00%)</span>
+            </div>
+        </div>
+
+        <div id="chart-container">
+            <div id="chart-main"></div>
+        </div>
+
+        <div id="loading" class="hidden">
+            <div class="spinner"></div>
+            <p>Fetching stock data...</p>
+        </div>
+
+        <div id="error-msg" class="hidden">
+            <p>Unable to fetch stock data. Please check the ticker and try again.</p>
         </div>
     </main>
-
-    <div id="win-modal" class="hidden">
-        <div class="modal-content">
-            <h2 id="winner-text">Black Wins!</h2>
-            <button id="modal-restart-btn">Play Again</button>
-        </div>
-    </div>
 
     <script src="main.js"></script>
 </body>

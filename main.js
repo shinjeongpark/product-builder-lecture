@@ -1,225 +1,174 @@
-const BOARD_SIZE = 15;
+// main.js
+let chart = null;
 
-class OmokGame extends HTMLElement {
-    constructor() {
-        super();
-        this.attachShadow({ mode: 'open' });
-        this.board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
-        this.currentPlayer = 'black';
-        this.gameOver = false;
-    }
-
-    connectedCallback() {
-        this.render();
-    }
-
-    reset() {
-        this.board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
-        this.currentPlayer = 'black';
-        this.gameOver = false;
-        this.updateStatus();
-        this.render();
-    }
-
-    updateStatus() {
-        const statusEl = document.getElementById('game-status');
-        if (statusEl) {
-            statusEl.textContent = this.gameOver ? 'Game Over' : `${this.currentPlayer.charAt(0).toUpperCase() + this.currentPlayer.slice(1)}'s Turn`;
-        }
-    }
-
-    handleCellClick(r, c) {
-        if (this.gameOver || this.board[r][c]) return;
-
-        this.board[r][c] = this.currentPlayer;
-        if (this.checkWin(r, c)) {
-            this.gameOver = true;
-            this.showWinModal();
+const calculateSMA = (data, period) => {
+    let sma = [];
+    for (let i = 0; i < data.length; i++) {
+        if (i < period - 1) {
+            sma.push({ x: data[i].x, y: null });
         } else {
-            this.currentPlayer = this.currentPlayer === 'black' ? 'white' : 'black';
-        }
-        this.updateStatus();
-        this.render();
-    }
-
-    checkWin(r, c) {
-        const directions = [
-            [0, 1],  // Horizontal
-            [1, 0],  // Vertical
-            [1, 1],  // Diagonal (top-left to bottom-right)
-            [1, -1]  // Diagonal (top-right to bottom-left)
-        ];
-
-        const player = this.board[r][c];
-
-        for (const [dr, dc] of directions) {
-            let count = 1;
-
-            // Check in forward direction
-            for (let i = 1; i < 5; i++) {
-                const nr = r + dr * i;
-                const nc = c + dc * i;
-                if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && this.board[nr][nc] === player) {
-                    count++;
-                } else break;
+            let sum = 0;
+            for (let j = 0; j < period; j++) {
+                sum += data[i - j].y[3]; // Closing price
             }
+            sma.push({ x: data[i].x, y: parseFloat((sum / period).toFixed(2)) });
+        }
+    }
+    return sma;
+};
 
-            // Check in backward direction
-            for (let i = 1; i < 5; i++) {
-                const nr = r - dr * i;
-                const nc = c - dc * i;
-                if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && this.board[nr][nc] === player) {
-                    count++;
-                } else break;
+const findSupportResistance = (data) => {
+    // Simplified algorithm to find major local min/max
+    const prices = data.map(d => d.y[3]);
+    const sortedPrices = [...prices].sort((a, b) => a - b);
+    
+    // Support: near the lowest 10th percentile
+    // Resistance: near the highest 90th percentile
+    const support = sortedPrices[Math.floor(prices.length * 0.05)];
+    const resistance = sortedPrices[Math.floor(prices.length * 0.95)];
+    
+    return { support, resistance };
+};
+
+const fetchStockData = async (ticker) => {
+    const loading = document.getElementById('loading');
+    const errorMsg = document.getElementById('error-msg');
+    const stockInfo = document.getElementById('stock-info');
+    
+    loading.classList.remove('hidden');
+    errorMsg.classList.add('hidden');
+    stockInfo.classList.add('hidden');
+    if (chart) chart.destroy();
+
+    try {
+        // Using Yahoo Finance Chart API through a CORS proxy
+        const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=1y&interval=1d`);
+        const result = await response.json();
+        
+        if (!result.chart.result) throw new Error("Invalid Ticker");
+        
+        const data = result.chart.result[0];
+        const timestamps = data.timestamp;
+        const quotes = data.indicators.quote[0];
+        const meta = data.meta;
+
+        const chartData = timestamps.map((ts, i) => ({
+            x: new Date(ts * 1000),
+            y: [
+                parseFloat(quotes.open[i]?.toFixed(2)), 
+                parseFloat(quotes.high[i]?.toFixed(2)), 
+                parseFloat(quotes.low[i]?.toFixed(2)), 
+                parseFloat(quotes.close[i]?.toFixed(2))
+            ]
+        })).filter(d => d.y.every(v => v !== null && !isNaN(v)));
+
+        renderChart(ticker, chartData, meta);
+        updateUI(meta, quotes);
+        
+        loading.classList.add('hidden');
+        stockInfo.classList.remove('hidden');
+    } catch (error) {
+        console.error(error);
+        loading.classList.add('hidden');
+        errorMsg.classList.remove('hidden');
+    }
+};
+
+const updateUI = (meta, quotes) => {
+    document.getElementById('stock-name').textContent = `${meta.symbol} - ${meta.exchangeName}`;
+    const lastPrice = meta.regularMarketPrice;
+    const prevClose = meta.previousClose;
+    const diff = lastPrice - prevClose;
+    const percent = (diff / prevClose) * 100;
+    
+    const priceEl = document.getElementById('current-price');
+    const changeEl = document.getElementById('price-change');
+    
+    priceEl.textContent = `$${lastPrice.toLocaleString()}`;
+    changeEl.textContent = `${diff.toFixed(2)} (${percent.toFixed(2)}%)`;
+    changeEl.className = diff >= 0 ? 'up' : 'down';
+};
+
+const renderChart = (ticker, data, meta) => {
+    const ma5 = calculateSMA(data, 5);
+    const ma20 = calculateSMA(data, 20);
+    const ma60 = calculateSMA(data, 60);
+    const ma120 = calculateSMA(data, 120);
+    const { support, resistance } = findSupportResistance(data);
+
+    const options = {
+        series: [
+            { name: 'Candle', type: 'candlestick', data: data },
+            { name: 'MA5', type: 'line', data: ma5 },
+            { name: 'MA20', type: 'line', data: ma20 },
+            { name: 'MA60', type: 'line', data: ma60 },
+            { name: 'MA120', type: 'line', data: ma120 }
+        ],
+        chart: {
+            height: 600,
+            type: 'line',
+            background: 'transparent',
+            foreColor: getComputedStyle(document.body).getPropertyValue('--text-color'),
+            toolbar: { show: true }
+        },
+        stroke: { width: [1, 2, 2, 2, 2], curve: 'smooth' },
+        colors: ['#00c853', '#f44336', '#ffeb3b', '#4caf50', '#2196f3'], // Candle, MA5, MA20, MA60, MA120
+        title: { text: `${ticker} 1Y Analysis`, align: 'left' },
+        xaxis: { type: 'datetime' },
+        yaxis: { tooltip: { enabled: true } },
+        annotations: {
+            yaxis: [
+                {
+                    y: resistance,
+                    borderColor: '#ff5252',
+                    label: { borderColor: '#ff5252', style: { color: '#fff', background: '#ff5252' }, text: `Resistance: ${resistance.toFixed(2)}` }
+                },
+                {
+                    y: support,
+                    borderColor: '#00c853',
+                    label: { borderColor: '#00c853', style: { color: '#fff', background: '#00c853' }, text: `Support: ${support.toFixed(2)}` }
+                }
+            ]
+        },
+        plotOptions: {
+            candlestick: {
+                colors: { upward: '#00c853', downward: '#ff5252' },
+                wick: { useFillColor: true }
             }
-
-            if (count >= 5) return true;
-        }
-
-        return false;
-    }
-
-    showWinModal() {
-        const modal = document.getElementById('win-modal');
-        const text = document.getElementById('winner-text');
-        if (modal && text) {
-            text.textContent = `${this.currentPlayer.charAt(0).toUpperCase() + this.currentPlayer.slice(1)} Wins!`;
-            modal.classList.remove('hidden');
-        }
-    }
-
-    render() {
-        const cellSize = 30; // pixels
-        this.shadowRoot.innerHTML = `
-            <style>
-                :host {
-                    display: block;
-                    user-select: none;
-                }
-                .board-container {
-                    background-color: var(--board-color, #dcb35c);
-                    padding: 20px;
-                    border-radius: 5px;
-                    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-                    display: inline-block;
-                }
-                .grid {
-                    display: grid;
-                    grid-template-columns: repeat(${BOARD_SIZE}, ${cellSize}px);
-                    grid-template-rows: repeat(${BOARD_SIZE}, ${cellSize}px);
-                    position: relative;
-                }
-                /* Lines */
-                .cell {
-                    position: relative;
-                    width: ${cellSize}px;
-                    height: ${cellSize}px;
-                    cursor: pointer;
-                }
-                .cell::before, .cell::after {
-                    content: '';
-                    position: absolute;
-                    background-color: var(--line-color, #333);
-                }
-                .cell::before {
-                    top: 50%; left: 0; width: 100%; height: 1px;
-                    transform: translateY(-50%);
-                }
-                .cell::after {
-                    left: 50%; top: 0; height: 100%; width: 1px;
-                    transform: translateX(-50%);
-                }
-                /* Stone styling */
-                .stone {
-                    position: absolute;
-                    width: 26px;
-                    height: 26px;
-                    border-radius: 50%;
-                    top: 50%; left: 50%;
-                    transform: translate(-50%, -50%);
-                    z-index: 2;
-                    box-shadow: 1px 2px 3px rgba(0,0,0,0.3);
-                    pointer-events: none;
-                }
-                .black {
-                    background: radial-gradient(circle at 30% 30%, #555, #000);
-                }
-                .white {
-                    background: radial-gradient(circle at 30% 30%, #fff, #ccc);
-                }
-                /* Hover effect */
-                .cell:not(.has-stone):hover::after {
-                    content: '';
-                    position: absolute;
-                    width: 20px;
-                    height: 20px;
-                    border-radius: 50%;
-                    background-color: rgba(255, 255, 255, 0.3);
-                    z-index: 1;
-                    top: 50%; left: 50%;
-                    transform: translate(-50%, -50%);
-                }
-                @media (max-width: 500px) {
-                    .grid {
-                        grid-template-columns: repeat(${BOARD_SIZE}, 22px);
-                        grid-template-rows: repeat(${BOARD_SIZE}, 22px);
-                    }
-                    .cell { width: 22px; height: 22px; }
-                    .stone { width: 18px; height: 18px; }
-                }
-            </style>
-            <div class="board-container">
-                <div class="grid">
-                    ${this.board.map((row, r) => 
-                        row.map((stone, c) => `
-                            <div class="cell ${stone ? 'has-stone' : ''}" data-r="${r}" data-c="${c}">
-                                ${stone ? `<div class="stone ${stone}"></div>` : ''}
-                            </div>
-                        `).join('')
-                    ).join('')}
-                </div>
-            </div>
-        `;
-
-        this.shadowRoot.querySelectorAll('.cell').forEach(cell => {
-            cell.onclick = () => {
-                const r = parseInt(cell.dataset.r);
-                const c = parseInt(cell.dataset.c);
-                this.handleCellClick(r, c);
-            };
-        });
-    }
-}
-
-customElements.define('omok-game', OmokGame);
-
-// --- Initialization & Theme Logic ---
-document.addEventListener('DOMContentLoaded', () => {
-    const board = document.getElementById('omok-board');
-    const restartBtn = document.getElementById('restart-btn');
-    const modalRestartBtn = document.getElementById('modal-restart-btn');
-    const themeToggle = document.getElementById('theme-toggle');
-    const modal = document.getElementById('win-modal');
-    const body = document.body;
-
-    const resetGame = () => {
-        board.reset();
-        modal.classList.add('hidden');
+        },
+        legend: { position: 'top', horizontalAlign: 'right' },
+        tooltip: { shared: true, theme: document.body.getAttribute('data-theme') }
     };
 
-    restartBtn.onclick = resetGame;
-    modalRestartBtn.onclick = resetGame;
+    chart = new ApexCharts(document.querySelector("#chart-main"), options);
+    chart.render();
+};
 
-    // Theme logic
-    const savedTheme = localStorage.getItem('omok-theme') || 'light';
-    body.setAttribute('data-theme', savedTheme);
-    themeToggle.textContent = savedTheme === 'light' ? 'Dark Mode' : 'Light Mode';
-
-    themeToggle.onclick = () => {
-        const currentTheme = body.getAttribute('data-theme');
-        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-        body.setAttribute('data-theme', newTheme);
-        themeToggle.textContent = newTheme === 'light' ? 'Dark Mode' : 'Light Mode';
-        localStorage.setItem('omok-theme', newTheme);
-    };
+// Event Listeners
+document.getElementById('search-btn').addEventListener('click', () => {
+    const ticker = document.getElementById('ticker-input').value.toUpperCase();
+    if (ticker) fetchStockData(ticker);
 });
+
+document.getElementById('ticker-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        const ticker = document.getElementById('ticker-input').value.toUpperCase();
+        if (ticker) fetchStockData(ticker);
+    }
+});
+
+// Theme Toggle
+document.getElementById('theme-toggle').addEventListener('click', () => {
+    const body = document.body;
+    const currentTheme = body.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    body.setAttribute('data-theme', newTheme);
+    document.getElementById('theme-toggle').textContent = newTheme === 'dark' ? 'Light Mode' : 'Dark Mode';
+    
+    // Re-fetch to update chart colors
+    const ticker = document.getElementById('ticker-input').value.toUpperCase();
+    if (ticker) fetchStockData(ticker);
+});
+
+// Initial Load
+fetchStockData('AAPL');
