@@ -24,8 +24,7 @@ class LottoGenerator extends HTMLElement {
                 :host {
                     display: block;
                     text-align: center;
-                    padding: 2rem;
-                    font-family: system-ui, -apple-system, sans-serif;
+                    padding: 1rem;
                 }
                 .balls-container {
                     display: flex;
@@ -51,29 +50,30 @@ class LottoGenerator extends HTMLElement {
                     0% { transform: scale(0); }
                     100% { transform: scale(1); }
                 }
-                /* Lotto Ball Colors */
-                .ball-1 { background-color: #fbc400; } /* 1-10 */
-                .ball-11 { background-color: #69c8f2; } /* 11-20 */
-                .ball-21 { background-color: #ff7272; } /* 21-30 */
-                .ball-31 { background-color: #aaa; }    /* 31-40 */
-                .ball-41 { background-color: #b0d840; } /* 41-45 */
+                .ball-1 { background-color: #fbc400; }
+                .ball-11 { background-color: #69c8f2; }
+                .ball-21 { background-color: #ff7272; }
+                .ball-31 { background-color: #aaa; }
+                .ball-41 { background-color: #b0d840; }
 
-                button {
+                button#generateBtn {
                     padding: 12px 24px;
                     font-size: 1rem;
-                    background-color: #4A90E2;
+                    background-color: var(--button-bg, #4A90E2);
                     color: white;
                     border: none;
                     border-radius: 8px;
                     cursor: pointer;
-                    transition: background-color 0.2s;
+                    transition: all 0.2s;
                 }
-                button:hover {
-                    background-color: #357ABD;
+                button#generateBtn:hover {
+                    opacity: 0.9;
+                    transform: translateY(-2px);
                 }
                 .placeholder {
-                    color: #888;
+                    color: var(--text-color, #888);
                     font-style: italic;
+                    opacity: 0.6;
                 }
             </style>
             <div class="balls-container">
@@ -98,3 +98,23 @@ class LottoGenerator extends HTMLElement {
 }
 
 customElements.define('lotto-generator', LottoGenerator);
+
+// Theme Toggle Logic
+document.addEventListener('DOMContentLoaded', () => {
+    const themeToggle = document.getElementById('theme-toggle');
+    const body = document.body;
+    
+    // Check saved theme
+    const savedTheme = localStorage.getItem('lotto-theme') || 'light';
+    body.setAttribute('data-theme', savedTheme);
+    themeToggle.textContent = savedTheme === 'light' ? 'Dark Mode' : 'Light Mode';
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = body.getAttribute('data-theme');
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        
+        body.setAttribute('data-theme', newTheme);
+        themeToggle.textContent = newTheme === 'light' ? 'Dark Mode' : 'Light Mode';
+        localStorage.setItem('lotto-theme', newTheme);
+    });
+});
